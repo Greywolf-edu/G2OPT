@@ -1,2 +1,4 @@
-# FuzzyLogic-based-charging-method
-# Fuzzy-based
+# G2OPT
+
+# G@OPT
+
