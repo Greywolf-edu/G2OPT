@@ -18,6 +18,7 @@ class Network:
         self.request_id = []
         self.D_max = 0
         self.ECR_max = 0
+        self.alive = False
 
     def set_angle(self):
         for node in self.node:
@@ -74,7 +75,14 @@ class Network:
         node_writer.writeheader()
         node_log.close()
         t = 0
+        self.alive = True
         while t <= 2000000:
+            if self.alive == True and self.count_dead_node() > 0:
+                print('/t/t lifetime:{}'.format(t))
+                self.alive = False
+                with open('log/lifetime.txt', 'w') as f:
+                    f.write(t)
+        
             t = t + 1
             if (t-1) % 100 == 0:
                 node_log = open('log/dead_node.csv', 'a')
