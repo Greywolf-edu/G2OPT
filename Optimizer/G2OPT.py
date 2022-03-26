@@ -1,6 +1,5 @@
 import random
 from operator import itemgetter
-
 import numpy as np
 from scipy.spatial import distance
 

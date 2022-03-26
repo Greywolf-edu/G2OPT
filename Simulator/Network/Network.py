@@ -1,10 +1,10 @@
 import csv
-
 from scipy.spatial import distance
+import pickle
 
 import Simulator.Network.Parameter as para
 from Simulator.Network.Network_Method import uniform_com_func, to_string, count_package_function, partition_function, get_D_max, \
-    get_ECR_max, get_CN_max
+    get_ECR_max, get_CN_max, set_checkpoint
 
 
 class Network:
@@ -68,18 +68,22 @@ class Network:
                 mc.run(network=self, time_stem=t, optimizer=optimizer)
             return state
 
-    def simulate_lifetime(self, optimizer, file_name="log/energy_log.csv",
-                          D_max_func=get_D_max, ECR_max_func=get_ECR_max):
-        with open(file_name, "w") as information_log:
-            writer = csv.DictWriter(information_log, fieldnames=["time", "nb_dead_node", "nb_package"])
-            writer.writeheader()
-        nb_dead = 0
-        nb_package = len(self.target)
-        dead_time = 0
+    # def simulate_lifetime(self, optimizer, file_name="log/energy_log.csv",
+    #                       D_max_func=get_D_max, ECR_max_func=get_ECR_max):
 
-        t = 0
+    def simulate_max_time(self, exp_type='node', exp_index=4, nb_run=0, optimizer=None, t=0, dead_time=0, max_time=2000000, file_name="log/information_log.csv"):
+        nb_dead = self.count_dead_node()
+        nb_package = self.count_package()
+        dead_time = dead_time
+
+        if t == 0:
+            with open(file_name, "w") as information_log:
+                writer = csv.DictWriter(information_log, fieldnames=["time", "nb_dead_node", "nb_package"])
+                writer.writeheader()
+        
+        t = t
         self.alive = True
-        while t <= 2000000 and self.alive == True:
+        while t <= max_time and nb_package==len(self.target):
             t = t + 1
             if (t - 1) % 100 == 0:
                 print("time = ", t, ", lowest energy node: ", self.node[self.find_min_node()].energy, "at",
@@ -93,6 +97,33 @@ class Network:
                 for mc in self.mc_list:
                     print("\tMC#{} at{} is {}".format(mc.id, mc.current, mc.get_status()))
 
+            if (t-1) % 200 == 0 and t > 1:
+                set_checkpoint(t=t, exp_type=exp_type, exp_index=exp_index, nb_run=nb_run, network=self, optimizer=optimizer, dead_time=dead_time)
+
+        # with open(file_name, "w") as information_log:
+        #     writer = csv.DictWriter(information_log, fieldnames=["time", "nb_dead_node", "nb_package"])
+        #     writer.writeheader()
+        # nb_dead = 0
+        # nb_package = len(self.target)
+        # dead_time = 0
+
+        # t = 0
+        # self.alive = True
+        # while t <= 2000000 and self.alive == True:
+        #     t = t + 1
+        #     if (t - 1) % 100 == 0:
+        #         print("time = ", t, ", lowest energy node: ", self.node[self.find_min_node()].energy, "at",
+        #               self.node[self.find_min_node()].location)
+        #         print('\tnumber of dead node: {}'.format(self.count_dead_node()))
+        #         print('\tnumber of package: {}'.format(self.count_package()))
+        #         with open(file_name, 'a') as information_log:
+        #             node_writer = csv.DictWriter(information_log, fieldnames=["time", "nb_dead_node", "nb_package"])
+        #             node_writer.writerow(
+        #                 {"time": t, "nb_dead_node": self.count_dead_node(), "nb_package": self.count_package()})
+        #         for mc in self.mc_list:
+        #             print("\tMC#{} at{} is {}".format(mc.id, mc.current, mc.get_status()))
+
+
             ######################################
             if t == 200:
                 for index, node in enumerate(self.node):
@@ -102,7 +133,6 @@ class Network:
             ######################################
 
             state = self.run_per_second(t, optimizer)
-
             current_dead = self.count_dead_node()
             current_package = self.count_package()
             if not self.package_lost:
@@ -119,61 +149,9 @@ class Network:
         print('\nFinished with {} dead sensors, {} packages'.format(self.count_dead_node(), self.count_package()))
         return dead_time, nb_dead
 
-    def simulate_max_time(self, optimizer, max_time=10000, file_name="log/information_log.csv"):
-        with open(file_name, "w") as information_log:
-            writer = csv.DictWriter(information_log, fieldnames=["time", "nb_dead_node", "nb_package"])
-            writer.writeheader()
-        nb_dead = 0
-        nb_package = len(self.target)
-        dead_time = 0
 
-        t = 0
-        self.alive = True
-        while t <= max_time:
-            t = t + 1
-            if (t - 1) % 100 == 0:
-                print("time = ", t, ", lowest energy node: ", self.node[self.find_min_node()].energy, "at",
-                      self.node[self.find_min_node()].location)
-                print('\tnumber of dead node: {}'.format(self.count_dead_node()))
-                print('\tnumber of package: {}'.format(self.count_package()))
-                with open(file_name, 'a') as information_log:
-                    node_writer = csv.DictWriter(information_log, fieldnames=["time", "nb_dead_node", "nb_package"])
-                    node_writer.writerow(
-                        {"time": t, "nb_dead_node": self.count_dead_node(), "nb_package": self.count_package()})
-                for mc in self.mc_list:
-                    print("\tMC#{} at{} is {}".format(mc.id, mc.current, mc.get_status()))
-
-            ######################################
-            if t == 200:
-                for index, node in enumerate(self.node):
-                    if (t - node.check_point[-1]["time"]) > 50:
-                        node.set_check_point(t)
-                self.began = True
-            ######################################
-
-            state = self.run_per_second(t, optimizer)
-
-            current_dead = self.count_dead_node()
-            current_package = self.count_package()
-            if not self.package_lost:
-                if current_package < len(self.target):
-                    self.package_lost = True
-                    dead_time = t
-            if current_dead != nb_dead or current_package != nb_package:
-                nb_dead = current_dead
-                nb_package = current_package
-                with open(file_name, 'a') as information_log:
-                    node_writer = csv.DictWriter(information_log, fieldnames=["time", "nb_dead_node", "nb_package"])
-                    node_writer.writerow({"time": t, "nb_dead_node": current_dead, "nb_package": current_package})
-
-        print('\nFinished with {} dead sensors, {} packages'.format(self.count_dead_node(), self.count_package()))
-        return dead_time, nb_dead
-
-    def simulate(self, optimizer, max_time=None, file_name="log/energy_log.csv"):
-        if max_time:
-            life_time = self.simulate_max_time(optimizer=optimizer, max_time=max_time, file_name=file_name)
-        else:
-            life_time = self.simulate_lifetime(optimizer=optimizer, file_name=file_name)
+    def simulate(self, exp_type='node', exp_index=4, nb_run=0, optimizer=None, t=0, dead_time=0, max_time=2000000, file_name='log/log.csv'):
+        life_time = self.simulate_max_time(exp_type=exp_type, exp_index=exp_index, nb_run=nb_run, optimizer=optimizer, t=t, dead_time=dead_time, max_time=max_time, file_name=file_name)
         return life_time
 
     def print_net(self, func=to_string):
